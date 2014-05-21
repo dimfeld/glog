@@ -408,7 +408,7 @@ type flushSyncWriter interface {
 }
 
 func init() {
-	flag.BoolVar(&logging.toStderr, "logtostderr", true, "log to standard error instead of files")
+	flag.BoolVar(&logging.toStderr, "logtostderr", false, "log to standard error instead of files")
 	flag.BoolVar(&logging.alsoToStderr, "alsologtostderr", false, "log to standard error as well as files")
 	flag.StringVar(&logging.logstashType, "logstashtype", "", "enable logstash logging and define the type")
 	flag.StringVar(&logging.logstashURL, "logstashurl", "172.17.42.1:5042", "logstash url and port")
