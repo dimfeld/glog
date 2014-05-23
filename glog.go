@@ -72,6 +72,7 @@ package glog
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"flag"
 	"fmt"
@@ -416,6 +417,7 @@ func init() {
 	flag.Var(&logging.stderrThreshold, "stderrthreshold", "logs at or above this threshold go to stderr")
 	flag.Var(&logging.vmodule, "vmodule", "comma-separated list of pattern=N settings for file-filtered logging")
 	flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
+	flag.BoolVar(&logging.compressAfterRotate, "compress", true, "compress log files after rotating them")
 
 	// Default stderrThreshold is ERROR.
 	logging.stderrThreshold = errorLog
@@ -500,6 +502,9 @@ type loggingT struct {
 	// so buffers can be grabbed and printed to without holding the main lock,
 	// for better parallelization.
 	freeListMu sync.Mutex
+
+	// Compress a log file after rotating it out
+	compressAfterRotate bool
 
 	// mu protects the remaining elements of this structure and is
 	// used to synchronize logging.
@@ -878,11 +883,45 @@ func (sb *syncBuffer) Write(p []byte) (n int, err error) {
 	return
 }
 
+// compressFile compresses a rotated log file
+func compressFile(file *os.File) {
+	defer file.Close()
+
+	_, err := file.Seek(0, 0)
+	if err != nil {
+		file.WriteString("compressFile: " + err.Error() + "\n")
+		return
+	}
+
+	filename := file.Name()
+	cFile, err := os.Create(filename + ".gz")
+	if err != nil {
+		file.WriteString("compressFile: " + err.Error() + "\n")
+		return
+	}
+	defer cFile.Close()
+
+	writer := gzip.NewWriter(cFile)
+	defer writer.Close()
+	_, err = io.Copy(writer, file)
+	if err != nil {
+		file.WriteString("compressFile: " + err.Error() + "\n")
+		return
+	}
+
+	// Only remove the file if everything else succeeded, so we don't lose data.
+	os.Remove(filename)
+}
+
 // rotateFile closes the syncBuffer's file and starts a new one.
 func (sb *syncBuffer) rotateFile(now time.Time) error {
 	if sb.file != nil {
 		sb.Flush()
-		sb.file.Close()
+		if logging.compressAfterRotate {
+			go compressFile(sb.file)
+		} else {
+			sb.file.Close()
+		}
 	}
 	var err error
 	sb.file, _, err = create(severityName[sb.sev], now)

@@ -18,7 +18,9 @@ package glog
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -81,6 +83,7 @@ func contains(s severity, str string, t *testing.T) bool {
 // setFlags configures the logging flags how the test expects them.
 func setFlags() {
 	logging.toStderr = false
+	logging.compressAfterRotate = true
 }
 
 // Test that Info works as advertised.
@@ -287,6 +290,43 @@ func TestRollover(t *testing.T) {
 	}
 	if info.nbytes >= MaxSize {
 		t.Errorf("file size was not reset: %d", info.nbytes)
+	}
+
+	<-time.After(1 * time.Second)
+
+	oldFile, err := os.Open(fname0)
+	if err == nil {
+		t.Errorf("Uncompressed old file still exists: %v", fname0)
+		oldFile.Close()
+	}
+
+	oldFile, err = os.Open(fname0 + ".gz")
+	if err != nil {
+		t.Fatalf("Compressed old file does not exist: %v", fname0+".gz")
+	}
+	defer oldFile.Close()
+
+	oldBuf := bytes.Buffer{}
+	gzipReader, err := gzip.NewReader(oldFile)
+	if err != nil {
+		t.Fatalf("Failed to create GZIP reader: %v", err)
+	}
+
+	_, err = oldBuf.ReadFrom(gzipReader)
+	if err != nil {
+		t.Fatalf("Failed to read gzipped content from %v: %v", fname0, err)
+	}
+	contents := string(oldBuf.Bytes())
+
+	// Just check the beginning and end of the file.
+	expect := "Log file created at"
+	if !strings.HasPrefix(contents, expect) {
+		t.Errorf("Old file header is incorrect, saw %s", contents[0:len(expect)])
+	}
+
+	expect = strings.Repeat("x", 20) + "\n"
+	if !strings.HasSuffix(contents, expect) {
+		t.Errorf("Old file ending is incorrect, saw %s", contents[len(contents)-len(expect):])
 	}
 }
 
