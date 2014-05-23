@@ -60,6 +60,13 @@ func init() {
 		host = shortHostname(h)
 	}
 
+	ReadUsername()
+}
+
+// ReadUsername reads the current username, used for setting log file names.
+// This is done automatically at startup, but processes that start as root and
+// drop privileges may want to call this after doing so.
+func ReadUsername() {
 	current, err := user.Current()
 	if err == nil {
 		userName = current.Username
