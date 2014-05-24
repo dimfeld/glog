@@ -37,5 +37,5 @@ The comment from glog.go introduces the ideas:
 
 
 The repository is originally based on open source version of the log package
-used inside Google. The [Zenoss](https://github.com/zenoss/glog) team made extensive modifications,
+used inside Google. The [Zenoss](https://github.com/zenoss/glog) team made some useful modifications,
 and this fork adds some additional functionality, such as automatic compression of rotated logs.
